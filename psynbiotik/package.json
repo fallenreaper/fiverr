@@ -1,0 +1,14 @@
+{
+    "name": "AESEncryption",
+    "version": "1.0.0",
+    "description": "A quick Node for andle AES Encryption",
+    "main": "encode.ts",
+    "dependencies": {
+        "crypto-js": "latest"
+    },
+    "devDependencies": {
+        "ts-node": "^8.7.0",
+        "typescript": "^3.8.3"
+    },
+    "typings": "dist/index.d.ts"
+}
