@@ -25,19 +25,10 @@ export class AESEncryption {
             padding:  CryptoJs.pad.Pkcs7
         });
         return decrypted.toString(CryptoJs.enc.Utf8);
-
-        // const s: string = CryptoJs.SHA256(secretKey).toString()//.substr(0, 8);
-        // console.log("Decrypt Secret: ", s)
-        // return CryptoJs.AES.decrypt(payload, secretKey, {
-        //     keySize: 16,
-        //     mode: CryptoJs.mode.CBC,
-        //     padding: CryptoJs.pad.Pkcs7
-        // }).toString(CryptoJs.enc.Utf8);
     }
 }
 
 const main = () => {
-    // console.log(CryptoJs)
     console.log("Running Main")
     const data = AESEncryption.encrypt("Hello World", "123")
     console.log("Encode", data);
