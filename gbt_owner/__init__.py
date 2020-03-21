@@ -5,21 +5,29 @@ from bs4 import BeautifulSoup
 import threading
 import queue
 import time
+import os
 
 DEBUG = False
 ISBN_FILE = "./isbn.xlsx"
 BOOKKEEPER = "https://www.bookfinder.com/search/?isbn={isbn}&new_used=*&st=sr&ac=qr"
 # BOOKKEEPER = "https://www.bookfinder.com/search/?lang=en&isbn={isbn}&new_used=*&destination=us&currency=USD&mode=basic&st=sr&ac=qr"
 OUTPUT_CSV = "./out.csv"
-NUM_THREADS = 50
+THROUHGPUT = 40000  # 40k / 3600 => 11.1 requests per second.  Which is why SLEEP_TIMER is 1, and NUM_THREADS is computed.
+NUM_THREADS = round(THROUHGPUT / 3600)  # (Default: 50) Threads themselves. More threads is faster, but youre generally limited by Hardware Limitations of your CPU.
+SLEEP_TIMER = 0.9 # None or ANY Number in Seconds to sleep inbetween requests..
 
-COUNT = 0
 START = None
 END = None
 
 def process_isbn(isbn: str):
     try:
         html = requests.get(BOOKKEEPER.format(isbn=isbn)).text
+        if DEBUG:
+            f_name = f"./scrapes/{isbn}.html"
+            os.makedirs(os.path.dirname(f_name), exist_ok=True)
+            with open(f_name, "w") as fp:
+                fp.write(html)
+                print("Write Out " + isbn)
         data = BeautifulSoup(html, "html.parser")
     except:
         # -2 CONNECTION ERROR
@@ -63,12 +71,8 @@ def process_isbn(isbn: str):
     return (isbn, str(new_book_price), str(old_book_price))
 
 def process(isbn, fp):
-    global COUNT
-    COUNT = (COUNT + 1) % 10000
     t = process_isbn(isbn)
     print(t)
-    if COUNT == 0 and DEBUG:
-        print("10K Passed.")
     fp.write(",".join(t) + "\n")
 
 def worker():
@@ -77,6 +81,8 @@ def worker():
         if DEBUG: print(f"ISBN: {isbn}")
         process(isbn, fp)
         q.task_done()
+        if SLEEP_TIMER is not None and SLEEP_TIMER > 0:
+            time.sleep(SLEEP_TIMER)
 
 def main():
     global q
