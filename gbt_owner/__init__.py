@@ -9,9 +9,8 @@ import os
 
 DEBUG = False
 ISBN_FILE = "./isbn.xlsx"
-BOOKKEEPER = "https://www.bookfinder.com/search/?isbn={isbn}&new_used=*&st=sr&ac=qr"
-# BOOKKEEPER = "https://www.bookfinder.com/search/?lang=en&isbn={isbn}&new_used=*&destination=us&currency=USD&mode=basic&st=sr&ac=qr"
 OUTPUT_CSV = "./out.csv"
+BOOKKEEPER = "https://www.bookfinder.com/search/?isbn={isbn}&new_used=*&st=sr&ac=qr"
 THROUHGPUT = 40000  # 40k / 3600 => 11.1 requests per second.  Which is why SLEEP_TIMER is 1, and NUM_THREADS is computed.
 NUM_THREADS = round(THROUHGPUT / 3600)  # (Default: 50) Threads themselves. More threads is faster, but youre generally limited by Hardware Limitations of your CPU.
 SLEEP_TIMER = 0.9 # None or ANY Number in Seconds to sleep inbetween requests..
@@ -70,16 +69,13 @@ def process_isbn(isbn: str):
         old_book_price = -1
     return (isbn, str(new_book_price), str(old_book_price))
 
-def process(isbn, fp):
-    t = process_isbn(isbn)
-    print(t)
-    fp.write(",".join(t) + "\n")
-
 def worker():
     while True:
         isbn, fp = q.get()
         if DEBUG: print(f"ISBN: {isbn}")
-        process(isbn, fp)
+        t = process_isbn(isbn)
+        print(t)
+        fp.write(",".join(t) + "\n")
         q.task_done()
         if SLEEP_TIMER is not None and SLEEP_TIMER > 0:
             time.sleep(SLEEP_TIMER)
