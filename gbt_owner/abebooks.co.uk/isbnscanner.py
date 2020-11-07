@@ -69,18 +69,23 @@ def get_isbns():
     return list(set(pd.read_excel(ISBN_FILE, header=None)[0]))
 
 
-def worker():
-    global FAILED_ISBN
+def add_item(item, cost):
     global __RESULTS
     global __counter
+    __counter += 1
+    if (__counter % 100) == 0:
+        print(f"Number Processed: {__counter}")
+    __RESULTS.append((item, cost))
+
+
+def worker():
+    global FAILED_ISBN
     _p = get_next_proxy()
     proxies = {
         "http": _p,
         "https": _p
     }
     while True:
-        if (__counter % 100) == 0:
-            print(f"Number Processed: {__counter}")
         isbn, _attempt = q.get()
         try:
             response = requests.get(URL.format(isbn=isbn), proxies=proxies)
@@ -112,8 +117,7 @@ def worker():
                 if DEBUG:
                     print(
                         f"{response.status_code}, {proxies['http']} | Writing {isbn} => {_cost}")
-                __RESULTS.append((isbn, _cost))
-                __counter += 1
+                add_item(isbn, _cost)
             except AttributeError as e:
                 if DEBUG:
                     print(f"ISBN FAILURE: {isbn}")
@@ -121,8 +125,7 @@ def worker():
                 if _attempt < MAX_RETRIES:
                     q.put((isbn, _attempt + 1))
                 else:
-                    __RESULTS.append((isbn, '-1'))
-                    __counter += 1
+                    add_item(isbn, '-1')
                     FAILED_ISBN.add(isbn)
         except OSError as e:
             if DEBUG:
@@ -136,8 +139,7 @@ def worker():
             if _attempt < MAX_RETRIES:
                 q.put((isbn, _attempt + 1))
             else:
-                __RESULTS.append((isbn, '-2'))
-                __counter += 1
+                add_item(isbn, '-2')
         except Exception as e:
             if DEBUG:
                 print("Failed to get file. ", e)
@@ -149,8 +151,7 @@ def worker():
             if _attempt < MAX_RETRIES:
                 q.put((isbn, _attemp + 1))
             else:
-                __RESULTS.append((isbn, '-2'))
-                __counter += 1
+                add_item(isbn, '-2')
         q.task_done()
 
         if SLEEP_TIMER is not None and SLEEP_TIMER > 0:
@@ -174,7 +175,8 @@ def main():
         x.start()
     q.join()
     with open(OUTPUTFILE, "w+") as fp:
-        fp.writelines([",".join(isbn, price)+'\n' for isbn, price in __RESULTS])
+        fp.writelines(
+            [",".join(isbn, price)+'\n' for isbn, price in __RESULTS])
 
     with open("failed_isbn.csv", "w+") as fp:
         fp.writelines([str(x)+'\n' for x in FAILED_ISBN])
