@@ -66,7 +66,7 @@ def remove_dead_proxy(ip):
 
 
 def get_isbns():
-    return list(set(pd.read_excel(ISBN_FILE)))
+    return list(set(pd.read_excel(ISBN_FILE, header=None)[0]))
 
 
 def worker():
@@ -166,7 +166,7 @@ def main():
     for isbn in ISBN_LIST:
         q.put((isbn, 0))
     if DEBUG:
-        print(f"Size: {len(ISBN_LIST)}")
+        print(f"Number of ISBN to Process: {len(ISBN_LIST)}")
 
     for i in range(NUM_THREADS):
         x = threading.Thread(target=worker)
@@ -174,7 +174,7 @@ def main():
         x.start()
     q.join()
     with open(OUTPUTFILE, "w+") as fp:
-        fp.write([",".join(isbn, price)+'\n' for isbn, price in __RESULTS])
+        fp.writelines([",".join(isbn, price)+'\n' for isbn, price in __RESULTS])
 
     with open("failed_isbn.csv", "w+") as fp:
         fp.writelines([str(x)+'\n' for x in FAILED_ISBN])
@@ -212,11 +212,11 @@ if __name__ == '__main__':
     if args.debug:
         DEBUG = True
 
-    print("Starting.")
+    print("Starting....")
     rebuild_proxylist()
     START = time.time()
     main()
     END = time.time()
     _overall = END - START
     print(
-        f"Application Completed Running.\nNumber of ISBN Checked: {len(ISBN_LIST)}\nFailed Items: {len(FAILED_ISBN)}\n Time to Completion: {_overall}")
+        f"...Application Completed Running.\nNumber of ISBN Checked: {len(ISBN_LIST)}\nFailed Items: {len(FAILED_ISBN)}\n Time to Completion: {_overall}")
