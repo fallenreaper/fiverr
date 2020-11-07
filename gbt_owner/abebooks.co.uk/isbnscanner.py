@@ -64,10 +64,8 @@ def remove_dead_proxy(ip):
     PROXY_LIST.remove(ip)
   rebuild_proxylist()
 
-
-def get_isbns():
-  return sorted(set(pd.read_excel(ISBN_FILE, header=None)[0]))
-
+def get_isbns_set():
+  return set(pd.read_excel(ISBN_FILE, header=None)[0])
 
 def add_item(item, cost):
   global __RESULTS
@@ -135,10 +133,7 @@ def worker():
           "http": _p,
           "https": _p
       }
-      if _attempt < MAX_RETRIES:
-        q.put((isbn, _attempt + 1))
-      else:
-        add_item(isbn, '-2')
+      q.put((isbn, _attempt))
     except Exception as e:
       if DEBUG:
         print("Failed to get file. ", e)
@@ -162,8 +157,19 @@ def main():
   global ISBN_LIST
   q = queue.Queue()
   count = 0
-  ISBN_LIST = get_isbns()
-  for isbn in ISBN_LIST:
+  print("Building ISBN List")
+  ISBN_LIST = get_isbns_set()
+  try:
+    _recovered_df = pd.read_csv(f"DUMP-{OUTPUTFILE}", header=None)
+    for _idx, _row in _recovered_df.iterrows():
+      _isbn, _cost = _row
+      __RESULTS.append((_isbn, _cost))
+      if _row in ISBN_LIST:
+        ISBN_LIST.remove(_row)
+  except:
+    pass
+  print("Finished Building ISBN List.")
+  for isbn in sorted(ISBN_LIST):
     q.put((isbn, 0))
   if DEBUG:
     print(f"Number of ISBN to Process: {len(ISBN_LIST)}")
