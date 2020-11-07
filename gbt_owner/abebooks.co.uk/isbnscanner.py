@@ -66,7 +66,7 @@ def remove_dead_proxy(ip):
 
 
 def get_isbns():
-    return list(set(pd.read_excel(ISBN_FILE)["ISBN"]))
+    return list(set(pd.read_excel(ISBN_FILE)))
 
 
 def worker():
@@ -194,7 +194,8 @@ if __name__ == '__main__':
         '--sleep', help=f"Sleep Timer.  Default: {SLEEP_TIMER} seconds", type=float, default=SLEEP_TIMER)
     parser.add_argument('--max-proxy-latency',
                         help=f"Max Latency for Free Proxies.  Default: '{MAX_PROXY_LATENCY}'", type=int, default=MAX_PROXY_LATENCY)
-    parser.add_argument('--debug', help="Turns On Debugger", action="returns_true")
+    parser.add_argument('--debug', help="Turns On Debugger",
+                        action="store_true")
     args = parser.parse_args()
     if args.outfile:
         OUTPUTFILE = args.outfile
@@ -209,7 +210,7 @@ if __name__ == '__main__':
     if args.max_proxy_latency:
         MAX_PROXY_LATENCY = args.max_proxy_latency
     if args.debug:
-      DEBUG = True
+        DEBUG = True
 
     print("Starting.")
     rebuild_proxylist()
