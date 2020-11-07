@@ -66,7 +66,7 @@ def remove_dead_proxy(ip):
 
 
 def get_isbns():
-    return list(set(pd.read_excel(ISBN_FILE, header=None)[0]))
+    return sorted(set(pd.read_excel(ISBN_FILE, header=None)[0]))
 
 
 def add_item(item, cost):
@@ -175,15 +175,17 @@ def main():
         x.start()
     q.join()
     with open(OUTPUTFILE, "w+") as fp:
-        fp.writelines(
-            [",".join(isbn, price)+'\n' for isbn, price in __RESULTS])
-
+        fp.writelines([",".join(isbn, price)+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
     with open("failed_isbn.csv", "w+") as fp:
         fp.writelines([str(x)+'\n' for x in FAILED_ISBN])
 
+def crash_dump():
+  with open(f"DUMP-{OUTPUTFILE}", "w+") as dp:
+    dp.writelines([",".join([isbn, cost]) + '\n' for isbn, cost in sorted(__RESULTS, key=lambda row: row[0])])
+  print("Dump Complete.")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser=argparse.ArgumentParser()
     parser.add_argument(
         '-o', '--outfile', help=f'File output.  Default: {OUTPUTFILE}', default=OUTPUTFILE)
     parser.add_argument(
@@ -198,27 +200,31 @@ if __name__ == '__main__':
                         help=f"Max Latency for Free Proxies.  Default: '{MAX_PROXY_LATENCY}'", type=int, default=MAX_PROXY_LATENCY)
     parser.add_argument('--debug', help="Turns On Debugger",
                         action="store_true")
-    args = parser.parse_args()
+    args=parser.parse_args()
     if args.outfile:
-        OUTPUTFILE = args.outfile
+        OUTPUTFILE=args.outfile
     if args.input:
-        ISBN_FILE = args.input
+        ISBN_FILE=args.input
     if args.retries:
-        MAX_RETRIES = args.retries
+        MAX_RETRIES=args.retries
     if args.threads:
-        NUM_THREADS = args.threads
+        NUM_THREADS=args.threads
     if args.sleep:
-        SLEEP_TIMER = args.sleep
+        SLEEP_TIMER=args.sleep
     if args.max_proxy_latency:
-        MAX_PROXY_LATENCY = args.max_proxy_latency
+        MAX_PROXY_LATENCY=args.max_proxy_latency
     if args.debug:
-        DEBUG = True
+        DEBUG=True
 
     print("Starting....")
     rebuild_proxylist()
-    START = time.time()
-    main()
-    END = time.time()
-    _overall = END - START
+    START=time.time()
+    try:
+      main()
+    except KeyboardInterrupt as e:
+      print("Interuption!")
+      crash_dump()
+    END=time.time()
+    _overall=END - START
     print(
         f"...Application Completed Running.\nNumber of ISBN Checked: {len(ISBN_LIST)}\nFailed Items: {len(FAILED_ISBN)}\n Time to Completion: {_overall}")
