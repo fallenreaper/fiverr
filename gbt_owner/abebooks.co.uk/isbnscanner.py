@@ -16,7 +16,7 @@ ISBN_LIST = []
 FAILED_ISBN = set([])
 MAX_RETRIES = 0
 NUM_THREADS = 4
-DEBUG = True
+DEBUG = False
 SLEEP_TIMER = 0.5
 MAX_PROXY_LATENCY = 200
 __RESULTS = []
@@ -194,6 +194,7 @@ if __name__ == '__main__':
         '--sleep', help=f"Sleep Timer.  Default: {SLEEP_TIMER} seconds", type=float, default=SLEEP_TIMER)
     parser.add_argument('--max-proxy-latency',
                         help=f"Max Latency for Free Proxies.  Default: '{MAX_PROXY_LATENCY}'", type=int, default=MAX_PROXY_LATENCY)
+    parser.add_argument('--debug', help="Turns On Debugger", action="returns_true")
     args = parser.parse_args()
     if args.outfile:
         OUTPUTFILE = args.outfile
@@ -207,6 +208,8 @@ if __name__ == '__main__':
         SLEEP_TIMER = args.sleep
     if args.max_proxy_latency:
         MAX_PROXY_LATENCY = args.max_proxy_latency
+    if args.debug:
+      DEBUG = True
 
     print("Starting.")
     rebuild_proxylist()
