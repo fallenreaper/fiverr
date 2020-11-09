@@ -92,8 +92,8 @@ def add_item(item, cost):
 
 def thread_monitoring():
   global THREAD_LIST
-  try:
-    while True:
+  while True:
+    try:
       for t in THREAD_LIST:
         if t.is_alive is False:
           newthread = threading.Thread(target=worker)
@@ -102,8 +102,8 @@ def thread_monitoring():
           THREAD_LIST.append(newthread)
           newthread.start()
       time.sleep(2)
-  except Exception as e:
-    print("Error Watching Threads", e)
+    except Exception as e:
+      print("Error Watching Threads", e)
 
 def worker():
   global FAILED_ISBN
@@ -209,8 +209,9 @@ def main():
   monitor = threading.Thread(target=thread_monitoring)
   monitor.daemon = True
   monitor.start()
-  
+
   q.join()
+  monitor._delete()
   # with open(OUTPUTFILE, "w+") as fp:
   #   fp.writelines([",".join(str(isbn), str(price))+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
   with open("failed_isbn.csv", "w+") as fp:
