@@ -205,6 +205,11 @@ def main():
     x.daemon = True
     THREAD_LIST.append(x)
     x.start()
+
+  monitor = threading.Thread(target=thread_monitoring)
+  monitor.daemon = True
+  monitor.start()
+  
   q.join()
   # with open(OUTPUTFILE, "w+") as fp:
   #   fp.writelines([",".join(str(isbn), str(price))+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
