@@ -8,11 +8,13 @@ import random
 import math
 import requests
 import argparse
+from typing import List
 
 URL = "https://www.abebooks.co.uk/servlet/SearchResults?bi=0&bx=off&ds=30&isbn={isbn}&n=200000169&recentlyadded=all&sortby=17&sts=t"
 OUTPUTFILE = "out.csv"
 ISBN_FILE = "./isbn.xlsx"
 ISBN_LIST = []
+THREAD_LIST : List[threading.Thread] = []
 FAILED_ISBN = set([])
 MAX_RETRIES = 0
 NUM_THREADS = 4
@@ -85,7 +87,23 @@ def add_item(item, cost):
   __counter += 1
   if (__counter % 100) == 0:
     print(f"Number Processed: {__counter}")
+    write_part()
   __RESULTS.append((item, cost))
+
+def thread_monitoring():
+  global THREAD_LIST
+  try:
+    while True:
+      for t in THREAD_LIST:
+        if t.is_alive is False:
+          newthread = threading.Thread(target=worker)
+          newthread.daemon = True
+          THREAD_LIST.remove(t)
+          THREAD_LIST.append(newthread)
+          newthread.start()
+      time.sleep(2)
+  except Exception as e:
+    print("Error Watching Threads", e)
 
 def worker():
   global FAILED_ISBN
@@ -156,6 +174,7 @@ def worker():
 def main():
   global q
   global ISBN_LIST
+  global THREAD_LIST
   q = queue.Queue()
   count = 0
   print("Building ISBN List")
@@ -184,10 +203,11 @@ def main():
   for i in range(NUM_THREADS):
     x = threading.Thread(target=worker)
     x.daemon = True
+    THREAD_LIST.append(x)
     x.start()
   q.join()
-  with open(OUTPUTFILE, "w+") as fp:
-    fp.writelines([",".join(str(isbn), str(price))+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
+  # with open(OUTPUTFILE, "w+") as fp:
+  #   fp.writelines([",".join(str(isbn), str(price))+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
   with open("failed_isbn.csv", "w+") as fp:
     fp.writelines([str(x)+'\n' for x in FAILED_ISBN])
 
@@ -196,6 +216,18 @@ def crash_dump():
   with open(f"DUMP-{OUTPUTFILE}", "w+") as dp:
     dp.writelines([",".join([str(isbn), str(cost)]) + '\n' for isbn, cost in sorted(__RESULTS, key=lambda row: row[0])])
   print("Dump Complete.")
+
+def write_part():
+  global __RESULTS
+  with open(OUTPUTFILE, "a") as fp:
+    _tmp = __RESULTS
+    fp.writelines([",".join([str(isbn), str(cost)]) + '\n' for isbn, cost in sorted(_tmp, key=lambda row: row[0])])
+    for i,c in _tmp:
+      for row in __RESULTS:
+        x,y = row
+        if i == x:
+          __RESULTS.remove(row)
+
 
 if __name__ == '__main__':
   parser=argparse.ArgumentParser()
