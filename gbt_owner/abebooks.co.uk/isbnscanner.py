@@ -55,17 +55,18 @@ def rebuild_proxylist():
     if DEBUG:
       print(PROXY_LIST)
   elif len(PROXY_LIST) < 4:
-    os.system(
-        f"curl 'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout={MAX_PROXY_LATENCY}&country=all&ssl=all&anonymity=all&simplified=true' > http_proxies.txt")
-    with open("http_proxies.txt") as fp:
-      PROXY_LIST = set([x.strip() for x in fp.readlines()])
+    _url = f"https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout={MAX_PROXY_LATENCY}&country=all&ssl=all&anonymity=all&simplified=true"
+    proxydata = requests.get(_url).text.split("\n")
+    PROXY_LIST = set([x.strip() for x in proxydata if x.strip() != ''])
     print("Proxy List Rebuilt.")
     if DEBUG:
       print(PROXY_LIST)
 
 
 def get_next_proxy():
-  _p = random.sample(PROXY_LIST, 1)[0]
+  if len(PROXY_LIST) == 0:
+    rebuild_proxylist()
+  _p = random.choice(tuple(PROXY_LIST))
   return { 
     'http': _p,
     'https': _p
@@ -96,12 +97,13 @@ def thread_monitoring():
     try:
       for t in THREAD_LIST:
         if t.is_alive is False:
+          if DEBUG: print("Found Failed Thread.")
           newthread = threading.Thread(target=worker)
           newthread.daemon = True
           THREAD_LIST.remove(t)
           THREAD_LIST.append(newthread)
           newthread.start()
-      time.sleep(2)
+      time.sleep(15)
     except Exception as e:
       print("Error Watching Threads", e)
 
@@ -181,7 +183,6 @@ def main():
   ISBN_LIST = get_isbns_set()
   try:
     _recovered_df = pd.read_csv(f"DUMP-{OUTPUTFILE}", header=None)
-    print(_recovered_df)
     for _idx in _recovered_df.index:
       try:
         _isbn = str(int(_recovered_df[0][_idx]))
@@ -191,6 +192,16 @@ def main():
       __RESULTS.append((_isbn, float(_cost)))
       if _isbn in ISBN_LIST:
         ISBN_LIST.remove(_isbn)
+    __recovered_out = pd.read_csv(OUTPUTFILE, header=None)
+    for _idx in __recovered_out.index:
+      try:
+        _isbn = str(int(__recovered_out[0][_idx]))
+        _cost = __recovered_out[1][_idx]
+      except:
+        continue
+      if _isbn in ISBN_LIST:
+        ISBN_LIST.remove(_isbn)
+
     print("Recovered Position...")
   except Exception as e:
     print("Failed to Recover Position: ", e)
