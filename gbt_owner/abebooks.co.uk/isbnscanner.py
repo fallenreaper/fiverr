@@ -9,7 +9,7 @@ import math
 import requests
 import argparse
 
-URL = "https://www.abebooks.co.uk/servlet/SearchResults?bi=0&bx=off&cm_sp=SearchF-_-Advtab1-_-Results&ds=30&isbn={isbn}&n=200000169&recentlyadded=all&sortby=17&sts=t"
+URL = "https://www.abebooks.co.uk/servlet/SearchResults?bi=0&bx=off&ds=30&isbn={isbn}&n=200000169&recentlyadded=all&sortby=17&sts=t"
 OUTPUTFILE = "out.csv"
 ISBN_FILE = "./isbn.xlsx"
 ISBN_LIST = []
@@ -19,6 +19,7 @@ NUM_THREADS = 4
 DEBUG = False
 SLEEP_TIMER = 0.5
 MAX_PROXY_LATENCY = 200
+PROXY_FILE = None
 __RESULTS = []
 __counter = 0
 
@@ -38,13 +39,20 @@ PROXY_LIST = set([])
 def rebuild_proxylist():
   global PROXY_LIST
   global time_between_proxy_rebuilds
-  if len(PROXY_LIST) < 4:
-    if time_between_proxy_rebuilds is None:
-      time_between_proxy_rebuilds = time.time()
-    else:
-      _under_3_minutes = 3*60
-      if (time.time() - time_between_proxy_rebuilds) < _under_3_minutes:
-        print("[WARNING] Rebuilding Proxy List too Frequently.  Cause:  Too Many Dead or Offline Proxies. This can drastically slow down Data processing.")
+  if time_between_proxy_rebuilds is None:
+    time_between_proxy_rebuilds = time.time()
+  else:
+    _under_3_minutes = 3*60
+    if (PROXY_FILE is not None or len(PROXY_LIST) < 4) and (time.time() - time_between_proxy_rebuilds) < _under_3_minutes:
+      print("[WARNING] Rebuilding Proxy List too Frequently.  Cause:  Too Many Dead or Offline Proxies. This can drastically slow down Data processing.")
+  
+  if PROXY_FILE is not None:
+    with open(PROXY_FILE) as fp:
+      PROXY_LIST = set([x.strip() for x in fp.readlines()])
+    print("Proxy List Rebuilt.")
+    if DEBUG:
+      print(PROXY_LIST)
+  elif len(PROXY_LIST) < 4:
     os.system(
         f"curl 'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout={MAX_PROXY_LATENCY}&country=all&ssl=all&anonymity=all&simplified=true' > http_proxies.txt")
     with open("http_proxies.txt") as fp:
@@ -55,7 +63,11 @@ def rebuild_proxylist():
 
 
 def get_next_proxy():
-  return random.sample(PROXY_LIST, 1)[0]
+  _p = random.sample(PROXY_LIST, 1)[0]
+  return { 
+    'http': _p,
+    'https': _p
+    }
 
 
 def remove_dead_proxy(ip):
@@ -75,82 +87,71 @@ def add_item(item, cost):
     print(f"Number Processed: {__counter}")
   __RESULTS.append((item, cost))
 
-
 def worker():
   global FAILED_ISBN
-  _p = get_next_proxy()
-  proxies = {
-      "http": _p,
-      "https": _p
-  }
-  while True:
-    isbn, _attempt = q.get()
-    try:
-      response = requests.get(URL.format(isbn=isbn), proxies=proxies)
-      if response.status_code == 429:
-        q.put((isbn, _attempt+1))
-        _p = get_next_proxy()
-        proxies = {
-            "http": _p,
-            "https": _p
-        }
-      elif response.status_code == 403:
-        remove_dead_proxy(_p)
-        q.put((isbn, _attempt+1))
-        _p = get_next_proxy()
-        proxies = {
-            "http": _p,
-            "https": _p
-        }
-      markup = response.text
-      if DEBUG:
-        f_name = f"./scrapes/{isbn}.html"
-        os.makedirs(os.path.dirname(f_name), exist_ok=True)
-        with open(f_name, "w") as _fp:
-          _fp.write(markup)
-      bs_data = BeautifulSoup(markup, "html.parser")
+  try:
+    proxies = get_next_proxy()
+    while True:
+      isbn, _attempt = q.get()
       try:
-        _cost = bs_data.find(
-            "div", attrs={"id": "srp-item-price-1"}).text.split(" ")[1]
+        response = requests.get(URL.format(isbn=isbn), proxies=proxies)
+        if response.status_code == 429:
+          q.put((isbn, _attempt+1))
+          proxies = get_next_proxy()
+        elif response.status_code == 403:
+          remove_dead_proxy(proxies['http'])
+          q.put((isbn, _attempt+1))
+          proxies = get_next_proxy()
+        markup = response.text
         if DEBUG:
-          print(f"{response.status_code}, {proxies['http']} | Writing {isbn} => {_cost}")
-        add_item(isbn, _cost)
-      except AttributeError as e:
+          f_name = f"./scrapes/{isbn}.html"
+          os.makedirs(os.path.dirname(f_name), exist_ok=True)
+          with open(f_name, "w") as _fp:
+            _fp.write(markup)
+        bs_data = BeautifulSoup(markup, "html.parser")
+        try:
+          # 3 Different ways to do approximately the same thing.
+          #
+          # _cost = bs_data.find(
+          #     "div", attrs={"id": "srp-item-price-1"}).text.split(" ")[1]
+          #
+          # _book = bs_data.find("div", attrs={"id": "book-1"})
+          # _h2 = _book.find("h2")
+          #
+          # _cost = _h2.find("meta", attrs={"itemprop": "price"})['content']
+          _cost = bs_data.select("div#book-1 h2 > meta[itemprop='price']")[0]['content']
+          if DEBUG:
+            print(f"{response.status_code}, {proxies['http']} | Writing {isbn} => {_cost}")
+          add_item(isbn, _cost)
+        except (AttributeError, IndexError) as e:
+          if DEBUG:
+            print(f"ISBN FAILURE: {isbn}", e)
+          # -1 Represents Unable to find the file.
+          if _attempt < MAX_RETRIES:
+            q.put((isbn, _attempt + 1))
+          else:
+            add_item(isbn, '-1')
+            FAILED_ISBN.add(isbn)
+      except OSError as e:
         if DEBUG:
-          print(f"ISBN FAILURE: {isbn}")
-        # -1 Represents Unable to find the file.
+          print("Possible Proxy dead. ", proxies['http'])
+        remove_dead_proxy(proxies['http'])
+        proxies = get_next_proxy()
+        q.put((isbn, _attempt))
+      except Exception as e:
+        if DEBUG:
+          print("Failed to get file. ", e)
+        proxies = get_next_proxy()
         if _attempt < MAX_RETRIES:
           q.put((isbn, _attempt + 1))
         else:
-          add_item(isbn, '-1')
-          FAILED_ISBN.add(isbn)
-    except OSError as e:
-      if DEBUG:
-        print("Possible Proxy dead. ", _p)
-      remove_dead_proxy(_p)
-      _p = get_next_proxy()
-      proxies = {
-          "http": _p,
-          "https": _p
-      }
-      q.put((isbn, _attempt))
-    except Exception as e:
-      if DEBUG:
-        print("Failed to get file. ", e)
-      _p = get_next_proxy()
-      proxies = {
-          "http": _p,
-          "https": _p
-      }
-      if _attempt < MAX_RETRIES:
-        q.put((isbn, _attemp + 1))
-      else:
-        add_item(isbn, '-2')
-    q.task_done()
+          add_item(isbn, '-2')
+      q.task_done()
 
-    if SLEEP_TIMER is not None and SLEEP_TIMER > 0:
-        time.sleep(SLEEP_TIMER)
-
+      if SLEEP_TIMER is not None and SLEEP_TIMER > 0:
+          time.sleep(SLEEP_TIMER)
+  except Exception as threadE:
+    print(f"Exception Not Expected: {threadE}")
 
 def main():
   global q
@@ -161,18 +162,24 @@ def main():
   ISBN_LIST = get_isbns_set()
   try:
     _recovered_df = pd.read_csv(f"DUMP-{OUTPUTFILE}", header=None)
-    for _idx, _row in _recovered_df.iterrows():
-      _isbn, _cost = _row
-      __RESULTS.append((_isbn, _cost))
-      if _row in ISBN_LIST:
-        ISBN_LIST.remove(_row)
-  except:
-    pass
+    print(_recovered_df)
+    for _idx in _recovered_df.index:
+      try:
+        _isbn = str(int(_recovered_df[0][_idx]))
+        _cost = _recovered_df[1][_idx]
+      except:
+        continue
+      __RESULTS.append((_isbn, float(_cost)))
+      if _isbn in ISBN_LIST:
+        ISBN_LIST.remove(_isbn)
+    print("Recovered Position...")
+  except Exception as e:
+    print("Failed to Recover Position: ", e)
   print("Finished Building ISBN List.")
   for isbn in sorted(ISBN_LIST):
     q.put((isbn, 0))
   if DEBUG:
-    print(f"Number of ISBN to Process: {len(ISBN_LIST)}")
+    print(f"Number of ISBN to Process: {len(ISBN_LIST)}.")
 
   for i in range(NUM_THREADS):
     x = threading.Thread(target=worker)
@@ -180,13 +187,14 @@ def main():
     x.start()
   q.join()
   with open(OUTPUTFILE, "w+") as fp:
-    fp.writelines([",".join(isbn, price)+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
+    fp.writelines([",".join(str(isbn), str(price))+'\n' for isbn, price in sorted(__RESULTS, key=lambda row: row[0])])
   with open("failed_isbn.csv", "w+") as fp:
     fp.writelines([str(x)+'\n' for x in FAILED_ISBN])
 
 def crash_dump():
+  print(f"Dumping Data: {__RESULTS}")
   with open(f"DUMP-{OUTPUTFILE}", "w+") as dp:
-    dp.writelines([",".join([isbn, cost]) + '\n' for isbn, cost in sorted(__RESULTS, key=lambda row: row[0])])
+    dp.writelines([",".join([str(isbn), str(cost)]) + '\n' for isbn, cost in sorted(__RESULTS, key=lambda row: row[0])])
   print("Dump Complete.")
 
 if __name__ == '__main__':
@@ -205,6 +213,7 @@ if __name__ == '__main__':
                       help=f"Max Latency for Free Proxies.  Default: '{MAX_PROXY_LATENCY}'", type=int, default=MAX_PROXY_LATENCY)
   parser.add_argument('--debug', help="Turns On Debugger",
                       action="store_true")
+  parser.add_argument('-p', '--proxy', help="ABS path to file representing proxy ip addresses", default=None)
   args=parser.parse_args()
   if args.outfile:
     OUTPUTFILE=args.outfile
@@ -220,6 +229,8 @@ if __name__ == '__main__':
     MAX_PROXY_LATENCY=args.max_proxy_latency
   if args.debug:
     DEBUG=True
+  if args.proxy:
+    PROXY_FILE = args.proxy
 
   print("Starting....")
   rebuild_proxylist()
@@ -227,9 +238,9 @@ if __name__ == '__main__':
   try:
     main()
   except KeyboardInterrupt as e:
-    print("Interuption!")
+    print("\nInteruption!")
     crash_dump()
   END=time.time()
   _overall=END - START
   print(
-      f"...Application Completed Running.\nNumber of ISBN Checked: {len(ISBN_LIST)}\nFailed Items: {len(FAILED_ISBN)}\n Time to Completion: {_overall}")
+      f"...Application Completed Running.\nNumber of ISBN in Memory: {len(ISBN_LIST)}\nFailed Items: {len(FAILED_ISBN)}\n Time to Completion: {_overall}")
