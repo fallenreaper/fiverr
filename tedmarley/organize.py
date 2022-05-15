@@ -57,7 +57,7 @@ def buildsampledata(path: str):
       fp.write("Test")
 
 def main():
-  x = ArgumentParser("File Organizer", description='We want to be able to parse and organize files by filename.')
+  x = ArgumentParser(__file__, description='We want to be able to parse and organize files by filename.')
   x.add_argument('-p', '--path', help='Absolute Path of folder to Organize', type=str, required=True)
   # x.add_argument('-o', help='Output Location.  If this is supplied it will change from src location to this new location.', type=str)
   x.add_argument('-b', help="Builds a Sample Set at --path.", action='store_true')
