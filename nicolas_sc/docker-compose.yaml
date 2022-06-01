@@ -1,0 +1,27 @@
+
+version: '3.1'
+services:
+  db:
+    image: mariadb:10.3
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: NotSecureChangeMe  # This is a DUMMY Password.  You need to change this.
+    volumes:
+      - ./mysqlfolder:/docker-entrypoint-initdb.d
+      - ./currentdb:/var/lib/mysql
+  phpmyadmin: # User 'root' and pw is defined above.
+    image: phpmyadmin:latest
+    restart: always
+    ports:
+      - 8080:80  # PHPMyAdmin is served to port 8080.  Change if you want it hosted elsewhere.
+    environment:
+      - PMA_HOST=db 
+  application:
+    build: . 
+    ports:
+      - 80:80  # Application will server to port 80.  If you want it somewhere else, change first number.
+    volumes:
+      - ./src:/var/www/html  # This is enabling a live update.  Without it, it will only do snapshots on build.
+      
+
+
