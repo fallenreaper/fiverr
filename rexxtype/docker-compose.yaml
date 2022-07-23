@@ -1,0 +1,23 @@
+version: "3.3"
+services:
+  server:
+    build: .
+    depends_on:
+      - db
+    volumes:
+      - ./src:/var/www/html
+    ports:
+      - 8000:80
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: jobdb
+      MYSQL_USER: jobuser
+      MYSQL_PASSWORD: password
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d
+    ports:
+      - 3306:3306
+  
