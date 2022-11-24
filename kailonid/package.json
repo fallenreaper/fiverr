@@ -1,0 +1,10 @@
+{
+	"name": "log-bot",
+	"version": "1.0.0",
+	"description": "Logging User Shared Data",
+	"main": "bot.js",
+	"author": "@Fallenreaper",
+	"dependencies": {
+		"discord.js": "^14.6.0"
+	}
+}
